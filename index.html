@@ -461,11 +461,11 @@
     <h3 id="modalTitle">Add Profile</h3>
     <div class="form-group" style="margin-bottom:14px">
       <label>Full Name</label>
-      <input type="text" id="pName" placeholder="e.g. Grace Maku Mturi">
+      <input type="text" id="pName">
     </div>
     <div class="form-group" style="margin-bottom:14px">
       <label>Target Role / Industry</label>
-      <input type="text" id="pRole" placeholder="e.g. Housekeeping Supervisor — Hospitality">
+      <input type="text" id="pRole" >
     </div>
     <div class="form-group" style="margin-bottom:14px">
       <label>Contact Details</label>
@@ -502,7 +502,6 @@ window.addEventListener('load', () => {
     const saved = localStorage.getItem('cvtailor_profiles');
     if (saved) state.profiles = JSON.parse(saved);
   } catch(e) {
-    // localStorage not available (Claude preview) — silent fail
   }
   renderProfiles();
 });
