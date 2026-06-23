@@ -1,6 +1,6 @@
 # SimamaCV
-
-SimamaCV is a browser-based resume tailoring tool that helps you:
+##StandOut.Get Noticed By ATS and Recruiters 
+SimamaCV is a browser-based, AI powered ,resume tailoring tool that helps you:
 
 - analyze a job description for ATS keywords and gaps
 - generate a tailored CV from your saved profile
