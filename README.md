@@ -1,5 +1,6 @@
 # SimamaCV
-##StandOut.Get Noticed By ATS and Recruiters 
+## StandOut.Get Noticed By ATS and Recruiters 
+
 SimamaCV is a browser-based, AI powered ,resume tailoring tool that helps you:
 
 - analyze a job description for ATS keywords and gaps
