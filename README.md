@@ -1,4 +1,4 @@
-# ✦ CV Tailor — AI-Powered Resume Generator
+# ✦SimamaCv — AI-Powered Resume Generator
 
 > Paste a job description. Select your profile. Get a tailored, ATS-optimised CV in seconds.
 
