@@ -1,5 +1,5 @@
 # SimamaCV
-## StandOut.Get Noticed By ATS and Recruiters 
+## StandOut to ATS and Recruiters 
 
 SimamaCV is a browser-based, AI powered ,resume tailoring tool that helps you:
 
@@ -8,7 +8,10 @@ SimamaCV is a browser-based, AI powered ,resume tailoring tool that helps you:
 - export to PDF or DOCX
 - create quick job-search links for major job boards
 
-No backend is required. The app runs as static files in your browser.
+No backend is required. The app rcan run as static files in your browser.
+##  Live Demo
+
+[Try SimamaCV](https://tbaraka.github.io/simamaCV/)
 
 ## Project structure
 
@@ -19,13 +22,17 @@ simamaCV/
 ├── app.js
 └── README.md
 ```
+## Installation
+```bash
+git clone https://github.com/Tbaraka/simamaCV.git
+cd simamaCV
+```
 
 ## Quick start
 
-1. Clone this repo.
-2. Open `index.html` in your browser.
-3. Paste your OpenAI API key in the app and connect.
-4. Add a profile, analyze a job description, then generate and export your CV.
+1. Open `index.html` in your browser.
+2. Paste your OpenAI API key in the app and connect.
+3. Add a profile, analyze a job description, then generate and export your CV.
 
 ## How it works
 
