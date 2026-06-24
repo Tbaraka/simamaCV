@@ -180,6 +180,74 @@ function closeProfileModal() {
   state.editingProfileId = null;
 }
 
+function openCVEditModal() {
+  if (!state.generatedCV) {
+    showAlert('generateOutput', 'Generate a CV first before editing.', 'error');
+    return;
+  }
+  const input = document.getElementById('cvEditJson');
+  const err = document.getElementById('cvEditError');
+  if (input) input.value = JSON.stringify(state.generatedCV, null, 2);
+  if (err) err.textContent = '';
+  document.getElementById('cvEditModal').classList.add('open');
+}
+
+function closeCVEditModal() {
+  document.getElementById('cvEditModal').classList.remove('open');
+}
+
+function normalizeCVData(data) {
+  const cv = data && typeof data === 'object' ? data : {};
+  return {
+    name: String(cv.name || '').trim(),
+    contact: String(cv.contact || '').trim(),
+    summary: String(cv.summary || '').trim(),
+    experience: Array.isArray(cv.experience) ? cv.experience.map(e => ({
+      title: String(e?.title || '').trim(),
+      org: String(e?.org || '').trim(),
+      location: String(e?.location || '').trim(),
+      dates: String(e?.dates || '').trim(),
+      bullets: Array.isArray(e?.bullets) ? e.bullets.map(b => String(b || '').trim()).filter(Boolean) : []
+    })) : [],
+    education: Array.isArray(cv.education) ? cv.education.map(e => ({
+      degree: String(e?.degree || '').trim(),
+      institution: String(e?.institution || '').trim(),
+      dates: String(e?.dates || '').trim(),
+      notes: String(e?.notes || '').trim()
+    })) : [],
+    skills: Array.isArray(cv.skills) ? cv.skills.map(s => ({
+      category: String(s?.category || '').trim(),
+      items: String(s?.items || '').trim()
+    })) : [],
+    certifications: Array.isArray(cv.certifications) ? cv.certifications.map(c => String(c || '').trim()).filter(Boolean) : []
+  };
+}
+
+function saveCVEdits() {
+  const raw = document.getElementById('cvEditJson').value.trim();
+  const errContainer = document.getElementById('cvEditError');
+  if (errContainer) errContainer.textContent = '';
+  if (!raw) {
+    showAlert('cvEditError', 'Paste valid CV JSON before saving.', 'error');
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    const normalized = normalizeCVData(parsed);
+    if (!normalized.name || !normalized.summary) {
+      showAlert('cvEditError', 'Please include at least `name` and `summary`.', 'error');
+      return;
+    }
+    state.generatedCV = normalized;
+    state.generatedCVRaw = JSON.stringify(normalized);
+    renderCVPreview(normalized);
+    closeCVEditModal();
+    showAlert('generateOutput', 'CV updated with your manual edits.', 'success');
+  } catch (e) {
+    showAlert('cvEditError', `Invalid JSON: ${e.message}`, 'error');
+  }
+}
+
 function saveProfile() {
   const name = document.getElementById('pName').value.trim();
   const role = document.getElementById('pRole').value.trim();
@@ -227,7 +295,7 @@ async function analyseJD() {
   if (!jd) { showAlert('analysisOutput', 'Paste a job description first.', 'error'); return; }
   if (!state.connected) { showAlert('analysisOutput', 'Connect your OpenAI API key first.', 'error'); return; }
 
-  const profile = state.profiles.find(p => p.id === profileId);
+  const profile = state.profiles.find(p => p.id === profileId) || state.activeProfile;
   state.lastJD = jd;
   state.lastRoleOverride = roleOverride;
   if (profile) state.activeProfile = profile;
@@ -246,13 +314,29 @@ async function analyseJD() {
   "requirements": ["req1","req2",...],
   "mustHave": ["critical skill 1","critical skill 2",...],
   "niceToHave": ["optional skill 1",...],
-  "atsScore": 72,
+  "atsScore": 0,
   "matches": ["matched skill/exp from CV",...],
   "gaps": ["missing skill/exp",...],
   "recommendation": "2-3 sentence honest assessment"
 }
-${profile ? `The candidate's CV: ${profile.cv}` : 'No CV provided — only analyse the JD.'}`;
-    const userPrompt = `${roleOverride ? `Target role override: ${roleOverride}\n\n` : ''}Job Description:\n${jd}`;
+
+SCORING RUBRIC (required):
+- Do NOT use a fixed/default score. Compute atsScore from evidence each time.
+- atsScore must be an integer from 0 to 100.
+- If candidate CV is provided, calculate:
+  1) Must-have coverage (40 points):
+     - score = 40 * (must-have items matched in CV / total must-have items).
+  2) Core requirements coverage (30 points):
+     - score = 30 * (requirements matched in CV / total requirements).
+  3) Keyword alignment (20 points):
+     - score = 20 * (JD keywords present in CV / total JD keywords).
+  4) Seniority/role alignment (10 points):
+     - 10 = clear alignment, 6 = partial alignment, 2 = weak alignment, 0 = mismatch.
+  5) atsScore = rounded sum of the four components above.
+- If no CV is provided, set atsScore to 0 and leave matches/gaps as JD-only observations.
+- Base matches and gaps strictly on explicit text evidence. Do not invent candidate experience.
+- Keep requirements, mustHave, and keywords concise and deduplicated.`;
+    const userPrompt = `${roleOverride ? `Target role override: ${roleOverride}\n\n` : ''}${profile ? `Candidate CV:\n${profile.cv}\n\n` : ''}Job Description:\n${jd}`;
     const raw = await callGPT(systemPrompt, userPrompt);
     const clean = raw.replace(/```json|```/g, '').trim();
     state.lastAnalysis = JSON.parse(clean);
@@ -265,58 +349,22 @@ ${profile ? `The candidate's CV: ${profile.cv}` : 'No CV provided — only analy
 
 function renderAnalysis(a) {
   const score = Math.max(0, Math.min(100, Number(a?.atsScore) || 0));
-  const circumference = 2 * Math.PI * 28;
-  const offset = circumference - (score / 100) * circumference;
   const scoreColor = score >= 80 ? '#22c55e' : score >= 65 ? '#f59e0b' : '#ef4444';
+  const label = score >= 80 ? 'Strong' : score >= 65 ? 'Good' : 'Needs work';
+  const title = `${escapeHtml(a?.title || '')}${a?.company && a.company !== 'Unknown' ? ' · ' + escapeHtml(a.company) : ''}`;
 
   document.getElementById('analysisOutput').innerHTML = `
-    <div class="analysis-grid">
-      <div class="analysis-card" style="text-align:center">
-        <h4>ATS Match Score</h4>
-        <div class="score-ring">
-          <svg width="80" height="80" viewBox="0 0 80 80">
-            <circle class="bg" cx="40" cy="40" r="28" stroke="var(--surface2)" stroke-width="6"/>
-            <circle class="fg" cx="40" cy="40" r="28" stroke="${scoreColor}" stroke-width="6"
-              stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
-          </svg>
-          <div>
-            <div class="score-number" style="color:${scoreColor}">${score}%</div>
-            <div class="score-label">${score >= 80 ? 'Strong' : score >= 65 ? 'Good' : 'Needs work'}</div>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--muted)">${escapeHtml(a?.title || '')} ${a?.company !== 'Unknown' ? '· ' + escapeHtml(a?.company || '') : ''}</div>
+    <div class="analysis-card">
+      <h4 style="margin-bottom:6px">ATS Match Score</h4>
+      <div class="score-number" style="color:${scoreColor}">${score}%</div>
+      <div class="score-label">${label}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">${title}</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text);line-height:1.6">${escapeHtml(a?.recommendation || '')}</div>
+      <div class="tag-list" style="margin-top:10px">
+        ${(a.keywords||[]).slice(0, 12).map(k => `<span class="tag keyword">${escapeHtml(String(k))}</span>`).join('')}
       </div>
-
-      <div class="analysis-card">
-        <h4>Recommendation</h4>
-        <p style="font-size:12px;color:var(--text);line-height:1.6">${escapeHtml(a?.recommendation || '')}</p>
-        <div style="margin-top:12px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">LEVEL</div>
-          <span class="tag keyword">${escapeHtml(a?.level || '')}</span>
-        </div>
-      </div>
-
-      <div class="analysis-card">
-        <h4>Matches (${a.matches?.length || 0})</h4>
-        <div class="tag-list">
-          ${(a.matches||[]).map(m => `<span class="tag match">${escapeHtml(String(m))}</span>`).join('')}
-          ${!a.matches?.length ? '<span style="color:var(--muted);font-size:12px">No profile selected</span>' : ''}
-        </div>
-      </div>
-
-      <div class="analysis-card">
-        <h4>Gaps (${a.gaps?.length || 0})</h4>
-        <div class="tag-list">
-          ${(a.gaps||[]).map(g => `<span class="tag gap">${escapeHtml(String(g))}</span>`).join('')}
-          ${!a.gaps?.length ? '<span style="color:var(--green);font-size:12px">No major gaps found</span>' : ''}
-        </div>
-      </div>
-
-      <div class="analysis-card" style="grid-column:1/-1">
-        <h4>ATS Keywords to Include</h4>
-        <div class="tag-list">
-          ${(a.keywords||[]).map(k => `<span class="tag keyword">${escapeHtml(String(k))}</span>`).join('')}
-        </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+        Matches: ${(a.matches||[]).length} · Gaps: ${(a.gaps||[]).length} · Level: ${escapeHtml(a?.level || 'Unknown')}
       </div>
     </div>
     <div class="alert success" style="margin-top:8px">Analysis complete. Switch to the <strong>Generate CV</strong> tab to create your tailored resume.</div>`;
@@ -337,10 +385,12 @@ async function generateCV() {
     const systemPrompt = `You are an expert ATS-optimised CV writer. Write a tailored, professional CV in Jake Resume format.
 
 RULES:
+
 - Use ONLY information from the candidate's CV. Never invent experience.
 - Rewrite bullets using action verbs and impact language.
 - Mirror the job description's exact keywords naturally.
 - If a target role override is provided, optimise wording for that role title.
+- Use the analysis guidance (must-have, gaps, recommendation) to prioritise what to emphasise.
 - Output structured JSON only — no markdown, no preamble.
 - Keep it honest, professional, and ATS-friendly.
 
@@ -348,7 +398,7 @@ Output this exact JSON:
 {
   "name": "Full Name",
   "contact": "phone | email | linkedin | location",
-  "summary": "3-sentence professional summary targeting this role",
+  "summary": "5-sentence professional summary targeting this role",
   "experience": [
     {
       "title": "Job Title",
@@ -367,11 +417,21 @@ Output this exact JSON:
   "certifications": ["cert1","cert2"]
 }`;
 
-    const userPrompt = `Candidate CV:\n${state.activeProfile.cv}\n\nContact: ${state.activeProfile.contact}\n\n${state.lastRoleOverride ? `Target role override: ${state.lastRoleOverride}\n\n` : ''}Job Description:\n${state.lastJD}\n\n${extra ? 'Additional instructions: ' + extra : ''}`;
+    const analysisHint = state.lastAnalysis ? JSON.stringify({
+      title: state.lastAnalysis.title,
+      level: state.lastAnalysis.level,
+      keywords: state.lastAnalysis.keywords,
+      mustHave: state.lastAnalysis.mustHave,
+      requirements: state.lastAnalysis.requirements,
+      gaps: state.lastAnalysis.gaps,
+      recommendation: state.lastAnalysis.recommendation
+    }) : '{}';
+
+    const userPrompt = `Candidate CV:\n${state.activeProfile.cv}\n\nContact: ${state.activeProfile.contact}\n\n${state.lastRoleOverride ? `Target role override: ${state.lastRoleOverride}\n\n` : ''}Job Description:\n${state.lastJD}\n\nAnalysis guidance JSON:\n${analysisHint}\n\nUse this guidance to improve ATS alignment, but never add experience not present in Candidate CV.\n\n${extra ? 'Additional instructions: ' + extra : ''}`;
 
     const raw = await callGPT(systemPrompt, userPrompt);
     const clean = raw.replace(/```json|```/g, '').trim();
-    const cvData = JSON.parse(clean);
+    const cvData = normalizeCVData(JSON.parse(clean));
     state.generatedCV = cvData;
     state.generatedCVRaw = JSON.stringify(cvData);
 

@@ -103,6 +103,7 @@
     <!-- TAB: PREVIEW -->
     <div class="panel" id="tab-preview">
       <div class="btn-row" id="exportButtons" style="display:none">
+        <button class="btn-secondary" onclick="openCVEditModal()"><span class="ui-icon icon-copy" aria-hidden="true"></span>Edit CV</button>
         <button class="btn-primary" onclick="downloadPDF()"><span class="ui-icon icon-download" aria-hidden="true"></span>Download PDF</button>
         <button class="btn-secondary" onclick="downloadDOCX()"><span class="ui-icon icon-download" aria-hidden="true"></span>Download DOCX</button>
         <button class="btn-secondary" onclick="copyCV()"><span class="ui-icon icon-copy" aria-hidden="true"></span>Copy Text</button>
@@ -171,6 +172,23 @@
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeProfileModal()">Cancel</button>
       <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
+    </div>
+  </div>
+</div>
+
+<!-- CV EDIT MODAL -->
+<div class="modal-overlay" id="cvEditModal">
+  <div class="modal modal-wide">
+    <h3>Edit Generated CV</h3>
+    <div class="alert info" style="margin-bottom:14px">Adjust any section, save, then export. Keep valid JSON format.</div>
+    <div class="form-group">
+      <label>CV JSON</label>
+      <textarea id="cvEditJson" style="min-height:340px;font-family:var(--mono)" placeholder='{"name":"","contact":"","summary":"","experience":[],"education":[],"skills":[],"certifications":[]}'></textarea>
+    </div>
+    <div id="cvEditError"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeCVEditModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveCVEdits()">Save Changes</button>
     </div>
   </div>
 </div>
