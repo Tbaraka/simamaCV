@@ -73,6 +73,51 @@ async function callGPT(systemPrompt, userPrompt) {
   return data.choices[0].message.content;
 }
 
+async function humanizeCV(cvData, context = {}) {
+  const safeCV = normalizeCVData(cvData);
+  const systemPrompt = `You are a CV humanizer and editor.
+
+Writing style:
+- Write like a human.
+- Keep it professional but conversational.
+- Don't use em dashes or buzzwords like "streamlined" or "delve into".
+- Avoid sounding like a press release.
+- Be clear, direct, and natural.
+
+Rules:
+- Keep ATS keyword relevance.
+- Preserve truthfulness and factual content.
+- Do NOT add new jobs, dates, numbers, degrees, certifications, or achievements.
+- Do NOT remove important evidence of skills.
+- Return valid JSON only, with this exact structure:
+{
+  "name": "Full Name",
+  "contact": "phone | email | linkedin | location",
+  "summary": "5-sentence professional summary targeting this role",
+  "experience": [
+    {
+      "title": "Job Title",
+      "org": "Organisation",
+      "location": "City, Country",
+      "dates": "Mon YYYY – Mon YYYY",
+      "bullets": ["bullet 1","bullet 2","bullet 3"]
+    }
+  ],
+  "education": [
+    { "degree": "Degree Name", "institution": "University", "dates": "YYYY", "notes": "optional" }
+  ],
+  "skills": [
+    { "category": "Category Name", "items": "skill1, skill2, skill3" }
+  ],
+  "certifications": ["cert1","cert2"]
+}`;
+
+  const userPrompt = `Role target: ${context.roleOverride || 'None'}\n\nJob description:\n${context.jd || ''}\n\nAdditional instructions:\n${context.extra || 'None'}\n\nCurrent CV JSON:\n${JSON.stringify(safeCV)}\n\nRewrite the CV to sound more human and polished while preserving facts exactly.`;
+  const raw = await callGPT(systemPrompt, userPrompt);
+  const clean = raw.replace(/```json|```/g, '').trim();
+  return normalizeCVData(JSON.parse(clean));
+}
+
 // ─── PROFILES ─────────────────────────────────────────────────────────────────
 function saveProfiles() {
   try { localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(state.profiles)); }
@@ -377,6 +422,7 @@ async function generateCV() {
   if (!state.connected) { showAlert('generateOutput', 'Connect your OpenAI API key first.', 'error'); return; }
 
   const extra = document.getElementById('extraInstructions').value.trim();
+  const useHumanizer = document.getElementById('humanizeTone')?.checked ?? true;
   const btn = document.getElementById('generateBtn');
   btn.disabled = true;
   document.getElementById('generateOutput').innerHTML = '<div class="loading"><div class="spinner"></div>Generating tailored CV...</div>';
@@ -431,12 +477,27 @@ Output this exact JSON:
 
     const raw = await callGPT(systemPrompt, userPrompt);
     const clean = raw.replace(/```json|```/g, '').trim();
-    const cvData = normalizeCVData(JSON.parse(clean));
+    let cvData = normalizeCVData(JSON.parse(clean));
+    let humanizerWarning = '';
+
+    if (useHumanizer) {
+      document.getElementById('generateOutput').innerHTML = '<div class="loading"><div class="spinner"></div>Humanizing CV tone while preserving facts...</div>';
+      try {
+        cvData = await humanizeCV(cvData, {
+          jd: state.lastJD,
+          roleOverride: state.lastRoleOverride,
+          extra
+        });
+      } catch (humanizeError) {
+        humanizerWarning = `<div class="alert info" style="margin-top:8px">Humanizer was skipped: ${escapeHtml(humanizeError.message || 'Unknown error')}</div>`;
+      }
+    }
+
     state.generatedCV = cvData;
     state.generatedCVRaw = JSON.stringify(cvData);
 
     renderCVPreview(cvData);
-    document.getElementById('generateOutput').innerHTML = '<div class="alert success">CV generated. Switch to <strong>Preview & Export</strong> to download.</div>';
+    document.getElementById('generateOutput').innerHTML = `<div class="alert success">CV generated. Switch to <strong>Preview & Export</strong> to download.</div>${humanizerWarning}`;
     document.getElementById('exportButtons').style.display = 'flex';
   } catch(e) {
     showAlert('generateOutput', `Error: ${e.message}`, 'error');
